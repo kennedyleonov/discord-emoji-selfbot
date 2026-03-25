@@ -1,0 +1,21 @@
+[project]
+name = "emojibot"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Author",email = "e@ma.il"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp (>=3.13.3,<4.0.0)",
+    "keyring (>=25.7.0,<26.0.0)",
+    "discord-py-self (>=2.1.0,<3.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "emojibot", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
