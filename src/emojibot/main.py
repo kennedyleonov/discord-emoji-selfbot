@@ -30,6 +30,7 @@ logging.basicConfig(
 )
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('emojibot')
+logger.setLevel(logging.INFO)
 
 logging.getLogger('discord').setLevel(logging.ERROR)
 logging.getLogger('discord.http').setLevel(logging.ERROR)
@@ -66,6 +67,8 @@ if config_file.exists():
     except json.decoder.JSONDecodeError as e:
         logger.error("can't decode config file")
         exit(1)
+    except KeyError as e:
+        pass
 else:
     logger.info('no config file found, using defaults...')
 
@@ -85,7 +88,6 @@ class EmojiPattern:
     pattern_emoji_text: str
     raw_start_pos: int
     raw_end_pos: int
-    command: Optional[str] = None
 
 @bot.event
 async def on_ready():
@@ -97,10 +99,9 @@ async def on_message(message):
         return
 
     text = message.content
-    logger.debug(f'received message: {text}')
+    logger.debug(f'received message: {text} in "{message.guild.name}"')
 
     command = None
-
     if text.startswith('\\'):
         next_symbol = text.find(' ')
         if next_symbol > 0:
@@ -108,16 +109,30 @@ async def on_message(message):
             command = cmd_text
 
     created_emojis_list = []
-    data = bytearray(text, 'utf-8')
+    data = text
     result = bytearray()
     last_char = 0
     for pattern in match_emoji_patterns(text):
-        # print(pattern)
-        if pattern.command:
-            command = pattern.command
+        logger.debug(pattern)
         available_emoji = None
-        loop_exit_flag = False
+        guild_loop_exit_flag = False
+        pattern_loop_skip_flag = False
+
+        # check if message uses current guild's emoji
+        for cur_emoji in message.guild.emojis:
+            if (
+                    (pattern.pattern_type == 'id' and pattern.pattern_emoji_text == str(cur_emoji.id))
+                    or
+                    (pattern.pattern_type == 'name' and pattern.pattern_emoji_text == cur_emoji.name)
+            ):
+                pattern_loop_skip_flag = True
+                break
+
+        if pattern_loop_skip_flag:
+            continue
+
         for guild in bot.guilds:
+            # logger.debug(f'checking guild {guild.id} {guild.name}')
             if guild.id == message.guild.id:
                 continue
             for cur_emoji in guild.emojis:
@@ -127,9 +142,9 @@ async def on_message(message):
                     (pattern.pattern_type == 'name' and pattern.pattern_emoji_text == cur_emoji.name)
                 ):
                     available_emoji = AvailableEmoji(cur_emoji.id, cur_emoji.name, cur_emoji.url, guild.id)
-                    loop_exit_flag = True
+                    guild_loop_exit_flag = True
                     break
-            if loop_exit_flag:
+            if guild_loop_exit_flag:
                 break
 
         if not available_emoji:
@@ -142,8 +157,9 @@ async def on_message(message):
         if cached:
             create_time = cached[1]
             current_time = int(time.time())
-            if (current_time - create_time) * 0.9 < DELETE_EMOJI_TIMEOUT_SECONDS:
-                new_emoji = created_emojis_cache[available_emoji.emoji_url][0]
+            if (current_time - create_time) < DELETE_EMOJI_TIMEOUT_SECONDS * 0.9:
+                # new_emoji = created_emojis_cache[available_emoji.emoji_url][0]
+                new_emoji = created_emojis_cache.get(available_emoji.emoji_url)[0]
                 logger.info(f'using cached {new_emoji}')
             else:
                 logger.info(f'removing cached {available_emoji.emoji_name}')
@@ -158,11 +174,11 @@ async def on_message(message):
             created_emojis_cache[available_emoji.emoji_url] = (str(new_emoji), int(time.time()))
         created_emojis_list.append(str(new_emoji))
 
-        result += data[last_char:pattern.raw_start_pos]
+        result += (data[last_char:pattern.raw_start_pos]).encode('utf-8')
         result += str(new_emoji).encode('utf-8')
         last_char = pattern.raw_end_pos + 1
 
-    result += data[last_char:]
+    result += (data[last_char:]).encode('utf-8')
     result = result.decode('utf-8')
 
     if last_char > 0:
@@ -211,16 +227,14 @@ async def delete_custom_emoji(guild, emoji) -> None:
 
 def match_emoji_patterns(text) -> Generator[EmojiPattern, None, None]:
     i = 0
-    command = None
     while i < len(text):
         if text[i] == ':':
             next_symbol = text.find(':', i + 1)
             if next_symbol == -1:
                 break
             else:
-                if next_symbol - i > 1:
-                    yield EmojiPattern(text[i:next_symbol + 1], 'name', text[i + 1:next_symbol], i, next_symbol + 1, command)
-                    command = None
+                if (next_symbol - i >= 2) and (next_symbol - i <= 32):
+                    yield EmojiPattern(text[i:next_symbol + 1], 'name', text[i + 1:next_symbol], i, next_symbol)
                 i = next_symbol
         i += 1
 
