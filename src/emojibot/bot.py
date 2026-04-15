@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, Tuple, Generator, Optional, List
 from dataclasses import dataclass
 
-from discord import Emoji
+from discord import Emoji, Message
 from discord.ext import commands
 
 DELETE_EMOJI_TIMEOUT_SECONDS=15
@@ -26,9 +26,25 @@ created_emojis_cache: Dict[str, Tuple[str, int]] = {}
 logger = logging.getLogger('emojibot')
 bot = commands.Bot(command_prefix=COMMAND_PREFIX, self_bot=False)
 
+@dataclass
+class AvailableEmoji:
+    emoji_id: int
+    emoji_name: str
+    emoji_url: str
+    guild_id: int
+
+@dataclass
+class EmojiPattern:
+    pattern_raw_text: str
+    pattern_type: str
+    pattern_emoji_text: str
+    raw_start_pos: int
+    raw_end_pos: int
+
 def run_emoji_bot():
     global DELETE_EMOJI_TIMEOUT_SECONDS
     global logger
+    global bot
 
     token = None
 
@@ -72,7 +88,7 @@ def run_emoji_bot():
             obj = json.loads(content)
             if obj['DELETE_EMOJI_TIMEOUT_SECONDS']:
                 DELETE_EMOJI_TIMEOUT_SECONDS = obj['DELETE_EMOJI_TIMEOUT_SECONDS']
-        except json.decoder.JSONDecodeError as e:
+        except json.decoder.JSONDecodeError:
             logger.error("can't decode config file")
             exit(1)
         except KeyError:
@@ -82,32 +98,19 @@ def run_emoji_bot():
 
     bot.run(token)
 
-@dataclass
-class AvailableEmoji:
-    emoji_id: int
-    emoji_name: str
-    emoji_url: str
-    guild_id: int
-
-@dataclass
-class EmojiPattern:
-    pattern_raw_text: str
-    pattern_type: str
-    pattern_emoji_text: str
-    raw_start_pos: int
-    raw_end_pos: int
-
 @bot.event
 async def on_ready():
     logger.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
+    for g in bot.guilds:
+        logger.debug(g.name)
 
 @bot.event
 async def on_message(message):
+    logger.debug(f'received message: {message.content} in "{message.guild.name}" from: {message.author.name}')
     if message.author.id != bot.user.id:
         return
 
     text = message.content
-    logger.debug(f'received message: {text} in "{message.guild.name}"')
 
     command = None
     if text.startswith('\\'):
@@ -166,7 +169,6 @@ async def on_message(message):
             create_time = cached[1]
             current_time = int(time.time())
             if (current_time - create_time) < DELETE_EMOJI_TIMEOUT_SECONDS * 0.9:
-                # new_emoji = created_emojis_cache[available_emoji.emoji_url][0]
                 new_emoji = created_emojis_cache.get(available_emoji.emoji_url)[0]
                 logger.info(f'using cached {new_emoji}')
             else:

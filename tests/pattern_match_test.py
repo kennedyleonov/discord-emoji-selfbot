@@ -13,14 +13,21 @@ logger = logging.getLogger(__name__)
         ('::', []),
         (':a:', []),
         (':1:', []),
+        ('1', []),
         ('12 1', [EmojiPattern('12', 'id', '12', 0, 1)]),
         (':thirty_two_letter_word_qwertyuio:', [EmojiPattern(':thirty_two_letter_word_qwertyuio:', 'name', 'thirty_two_letter_word_qwertyuio', 0, 33)]),
         (':thirty_three_letter_word_qwertyui:', []),
         (':as:', [EmojiPattern(':as:', 'name', 'as', 0, 3)]),
         (':as :', [EmojiPattern(':as :', 'name', 'as ', 0, 4)]),
         (':as:df:', [EmojiPattern(':as:', 'name', 'as', 0, 3)]),
-        (':as::df:', [EmojiPattern(':as:', 'name', 'as', 0, 3), EmojiPattern(':df:', 'name', 'df', 4, 7)]),
-        ('12 :as:', [EmojiPattern(':as:', 'name', 'as', 3, 6), EmojiPattern('12', 'id', '12', 0, 1)]),
+        (':as::df:', [
+            EmojiPattern(':as:', 'name', 'as', 0, 3),
+            EmojiPattern(':df:', 'name', 'df', 4, 7)
+        ]),
+        ('12 :as:', [
+            EmojiPattern(':as:', 'name', 'as', 3, 6),
+            EmojiPattern('12', 'id', '12', 0, 1)
+        ]),
     ]
 )
 def test_match_emoji_pattern(text, expected):
